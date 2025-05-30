@@ -13,7 +13,6 @@ def run_fallback_visualization(metrics: Dict[str, Any], metric_names: List[str] 
             atls_btls_metrics = EXPECTED_METRICS[:5]
             coverage_metrics = EXPECTED_METRICS[5:8]
             other_metrics = EXPECTED_METRICS[8:10]
-            # Filter metrics to process based on metric_names
             target_metrics = metric_names if metric_names else (atls_btls_metrics + coverage_metrics + other_metrics)
             if 'Pass/Fail' in metrics['metrics'] and (not metric_names or 'Pass/Fail' in metric_names):
                 target_metrics = list(set(target_metrics + ['Pass/Fail']))
