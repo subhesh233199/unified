@@ -37,8 +37,8 @@
             <h2>Analysis Report</h2>
             <div id="report" class="border p-3"></div>
             <button id="editReport" class="btn btn-primary mt-2">Edit Report</button>
-            <button id="saveChanges" class="btn btn-success mt-2" style="display:none">Save Changes</button>
-            <button id="cancelEdit" class="btn btn-secondary mt-2" style="display:none">Cancel</button>
+            <button id="saveChanges" class="btn btn-success mt-2" style="display:none;">Save Changes</button>
+            <button id="cancelEdit" class="btn btn-secondary mt-2" style="display:none;">Cancel</button>
             <button id="downloadHtml" class="btn btn-info mt-2">Download HTML</button>
             <button id="downloadPdf" class="btn btn-info mt-2">Download PDF</button>
         </div>
@@ -78,6 +78,7 @@
             base64Images.forEach(img => {
                 const imgElement = document.createElement('img');
                 imgElement.src = `data:image/png;base64,${img}`;
+                imgElement.style.maxWidth = '100%';
                 vizDiv.appendChild(imgElement);
             });
         }
@@ -97,7 +98,7 @@
         // Display hyperlinks in a table
         function displayHyperlinks(hyperlinks) {
             const hyperlinksDiv = document.getElementById('hyperlinks');
-            let html = '<table><tr><th>URL</th><th>Context</th><th>Page</th><th>Source File</th></tr>';
+            let html = '<table class="table"><tr><th>URL</th><th>Context</th><th>Page</th><th>Source File</th></tr>';
             hyperlinks.forEach(link => {
                 html += `<tr><td><a href="${link.url}" target="_blank">${link.url}</a></td><td>${link.context}</td><td>${link.page}</td><td>${link.source_file}</td></tr>`;
             });
@@ -148,9 +149,9 @@
             const vizDiv = document.getElementById('visualizations');
             let y = 10;
             await doc.html(reportDiv, {
-                callback: function () {
+                callback: function (doc) {
                     vizDiv.querySelectorAll('img').forEach((img, index) => {
-                        doc.addPage();
+                        if (index > 0) doc.addPage();
                         doc.addImage(img.src, 'PNG', 10, 10, 190, 100);
                     });
                     doc.save('report.pdf');
@@ -179,17 +180,20 @@
             try {
                 const folderPath = document.getElementById('folderPath').value;
                 const clearCache = document.getElementById('clearCache').checked;
-                const response = await fetch('/analyze', {
+                console.log('Sending request to /analyze with:', { folder_path: folderPath, clear_cache: clearCache });
+                const response = await fetch('http://127.0.0.1:8080/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ folder_path: folderPath, clear_cache: clearCache })
                 });
                 if (!response.ok) {
                     const error = await response.json();
+                    console.error('Backend Error:', error);
                     alert(`Error: ${error.detail}`);
                     return;
                 }
                 const data = await response.json();
+                console.log('Received response:', data);
                 currentMetrics = data.metrics;
                 metricsEditor.set(data.metrics);
                 displayVisualizations(data.visualizations);
@@ -197,6 +201,7 @@
                 displayEvaluation(data.evaluation);
                 displayHyperlinks(data.hyperlinks);
             } catch (error) {
+                console.error('Fetch Error:', error);
                 alert(`Error: ${error.message}`);
             } finally {
                 toggleLoading(false);
@@ -209,7 +214,7 @@
             const updatedMetrics = metricsEditor.get();
             const updatedReport = document.getElementById('reportEditor').value;
             try {
-                const response = await fetch('/update_metrics', {
+                const response = await fetch('http://127.0.0.1:8080/update_metrics', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -239,7 +244,7 @@
         // Check backend health
         async function checkHealth() {
             try {
-                const response = await fetch('/health');
+                const response = await fetch('http://127.0.0.1:8080/health');
                 const data = await response.json();
                 const statusDiv = document.createElement('div');
                 statusDiv.textContent = `Backend Status: ${data.status}`;
@@ -259,7 +264,9 @@
         document.getElementById('downloadPdf').addEventListener('click', downloadPDF);
 
         // Run health check on load
-        window.onload = checkHealth;
+        window.addEventListener('load', () => {
+            checkHealth();
+        });
     </script>
 </body>
 </html>
