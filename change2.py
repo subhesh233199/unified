@@ -54,7 +54,7 @@ async def update_metrics(request: UpdateMetricsRequest):
                 elif metric_name == 'Pass/Fail':
                     filename = 'pass_fail.png'
                 else:
-                    filename = f"{metric_name.replace('/', '_').png"
+                    filename = f"{metric_name.replace('/', '_')}.png"
                 filepath = os.path.join(viz_folder, filename)
                 if os.path.exists(filepath):
                     os.remove(filepath)
@@ -70,17 +70,17 @@ async def update_metrics(request: UpdateMetricsRequest):
                 else:
                     logger.warning(f"{script_path} not found, falling back to run_fallback_visualization")
                     run_fallback_visualization(request.metrics, changed_metrics)
-                except Exception as e:
-                    logger.error(f"Visualization script failed: {str(e)}")
-                    logger.info("Running fallback visualization for changed metrics")
-                    run_fallback_visualization(request.metrics, changed_metrics)
+            except Exception as e:
+                logger.error(f"Visualization script failed: {str(e)}")
+                logger.info("Running fallback visualization for changed metrics")
+                run_fallback_visualization(request.metrics, changed_metrics)
 
             # Collect new visualizations
             existing_files = {f for f in os.listdir(viz_folder) if f.endswith('.png')}
             viz_index = len(viz_base64)
             for metric_name in changed_metrics:
                 if metric_name in EXPECTED_METRICS[:5]:
-                    filename = f"{metric_name.replace('/', '_')}_atls_btls_{.png"
+                    filename = f"{metric_name.replace('/', '_')}_atls_btls.png"
                 elif metric_name == 'Pass/Fail':
                     filename = 'pass_fail.png'
                 else:
@@ -101,18 +101,16 @@ async def update_metrics(request: UpdateMetricsRequest):
 
             # Validate minimum visualizations
             min_visualizations = 5
-            if len(viz_base64) len < min_visualizations:
+            if len(viz_base64) < min_visualizations:
                 logger.error(f"Too few visualizations: {len(viz_base64)}")
                 raise HTTPException(
-                    status_code=500
-                    ,
+                    status_code=500,
                     detail=f"Failed to generate minimum required visualizations: got {len(viz_base64)}, need at least {min_visualizations}"
                 )
 
         # Re-evaluate report
         full_source_text = "\n".join(
-            f"File: {os.path.basename(pdf)}"
-            f"\n{locate_table(extract_text_from_pdf(pdf), START_HEADER_PATTERN, END_HEADER)}"
+            f"File: {os.path.basename(pdf)}\n{locate_table(extract_text_from_pdf(pdf), START_HEADER_PATTERN, END_HEADER)}"
             for pdf in pdf_files
         )
         score, evaluation = evaluate_with_llm_judge(full_source_text, updated_response.report)
