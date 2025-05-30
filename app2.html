@@ -4,297 +4,262 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RRR Analysis Tool</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked@4.0.12/lib/marked.umd.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked@4.0.12/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jsoneditor@9.10.2/dist/jsoneditor.min.js"></script>
 </head>
 <body>
+    <div class="container">
+        <h1 class="my-4">RRR Analysis Tool</h1>
 
-    
-        <h1 class="text-3xl font-bold mb-6 text-center">RRR Analysis Tool</h1>
+        <div class="mb-4">
+            <form id="analyzeForm">
+                <div class="mb-3">
+                    <label for="folderPath" class="form-label">Enter Folder Path</label>
+                    <input type="text" class="form-control" id="folderPath" required>
+                </div>
+                <div class="form-check mb-3">
+                    <input type="checkbox" class="form-check-input" id="clearCache">
+                    <label class="form-check-label" for="clearCache">Clear Cache</label>
+                </div>
+                <button type="button" class="btn btn-primary" id="analyzeBtn">Analyze</button>
+            </form>
+        </div>
 
+        <div id="loading" class="alert alert-info" style="display: none;">
+            Analyzing PDFs... This may take a few minutes.
+        </div>
 
-        
-            
-                
-                    <form id="folderForm">
-                        <label class="block text-lg font-medium text-gray-700">Enter Folder Path</label>
-                        <input type="text" id="folderPath" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
-                    
-                
-                    
-                        <label class="inline-flex items-center">
-                            <input type="checkbox" id="clearCache" class="form-checkbox h-5 w-5 text-blue-600">
-                            <span class="ml-2 text-gray-700">Clear Cache</span>
-                        </label>
-                    
-                
-                    
-                        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">
-                            Analyze
-                        </button>
-                    
-                </form>
-            
+        <div id="metricsEditor" style="display: none;"></div>
 
+        <div id="reportSection">
+            <h2>Analysis Report</h2>
+            <div id="report" class="border p-3"></div>
+            <button id="editReport" class="btn btn-primary mt-2">Edit Report</button>
+            <button id="saveChanges" class="btn btn-success mt-2" style="display:none">Save Changes</button>
+            <button id="cancelEdit" class="btn btn-secondary mt-2" style="display:none">Cancel</button>
+            <button id="downloadHtml" class="btn btn-info mt-2">Download HTML</button>
+            <button id="downloadPdf" class="btn btn-info mt-2">Download PDF</button>
+        </div>
 
-        
-            <div id="loading" class="hidden text-center">
+        <div id="visualizationsSection">
+            <h2>Visualizations</h2>
+            <div id="visualizations"></div>
+        </div>
 
-            <p>Analyzing PDFs... This may take a few minutes.</p>
-            </div>
+        <div id="evaluationSection">
+            <h2>Evaluation</h2>
+            <div id="evaluation"></div>
+        </div>
 
+        <div id="hyperlinksSection">
+            <h2>Hyperlinks</h2>
+            <div id="hyperlinks"></div>
+        </div>
+    </div>
 
-        
-            <div id="reportSection" class="hidden">
-                <h2 class="text-2xl font-semibold mb-4">Analysis Report</h2>
-
-            
-                <button id="editReport" class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600">Edit Report</button>
-                <button id="saveChanges" class="hidden bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">Save Changes</button>
-                <button id="cancelEdit" class="hidden bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600">Cancel</button>
-                <button id="downloadHtml" class="bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600">Download HTML</button>
-                <button id="downloadPdf" class="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600">Download PDF</button>
-            
-
-            <div id="reportContent"></div>
-            <textarea id="reportEditor" class="hidden w-full h-96 border border-gray-300 rounded-md p-4"></textarea>
-            </div>
-
-
-        
-            <div id="visualizationsSection" class="hidden">
-                <h2 class="text-2xl font-semibold mb-4">Visualizations</h2>
-
-            <div id="visualizationsContent"></div>
-            </div>
-
-
-        
-            <div id="evaluationSection" class="hidden">
-                <h2 class="text-2xl font-semibold mb-4">Evaluation</h2>
-
-            <div id="evaluationContent"></div>
-            </div>
-
-
-        
-            <div id="hyperlinksSection" class="hidden">
-                <h2 class="text-2xl font-semibold mb-4">Hyperlinks</h2>
-
-            <div id="hyperlinksContent"></div>
-            </div>
-
-        
-
-    
     <script>
+        // Initialize JSONEditor for metrics editing
+        const metricsEditorContainer = document.getElementById('metricsEditor');
+        const metricsEditor = new JSONEditor(metricsEditorContainer, { mode: 'tree' });
         let originalReport = '';
-        let currentMetrics = {};
+        let currentMetrics = null;
 
-        document.getElementById('folderForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            await analyzePDFs();
-        });
-
-        async function analyzePDFs() {
-            const folderPath = document.getElementById('folderPath').value;
-            const clearCache = document.getElementById('clearCache').checked;
-            if (!folderPath) {
-                alert('Please enter a folder path');
-                return;
-            }
-
-            showLoading(true);
-            try {
-                const response = await fetch('http://127.0.0.1:8080/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ folder_path: folderPath, clear_cache: clearCache })
-                });
-                if (!response.ok) throw new Error(`Analysis failed: ${response.statusText}`);
-                const data = await response.json();
-                currentMetrics = JSON.parse(JSON.stringify(data.metrics));
-                originalReport = data.report;
-                displayResults(data);
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Failed to analyze PDFs. Please check the server and folder path.');
-            } finally {
-                showLoading(false);
-            }
+        // Toggle loading indicator
+        function toggleLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
         }
 
-        function showLoading(show) {
-            document.getElementById('loading').classList.toggle('hidden', !show);
-            document.getElementById('reportSection').classList.add('hidden');
-            document.getElementById('visualizationsSection').classList.add('hidden');
-            document.getElementById('evaluationSection').classList.add('hidden');
-            document.getElementById('hyperlinksSection').classList.add('hidden');
-        }
-
-        function displayResults(data) {
-            // Report
-            document.getElementById('reportContent').innerHTML = marked.parse(data.report);
-            makeTablesEditable();
-            document.getElementById('reportSection').classList.remove('hidden');
-
-            // Visualizations
-            const vizContent = document.getElementById('visualizationsContent');
-            vizContent.innerHTML = '';
-            data.visualizations.forEach((base64, index) => {
-                const img = document.createElement('img');
-                img.src = `data:image/png;base64,${base64}`;
-                img.alt = `Visualization ${index + 1}`;
-                img.className = 'w-full h-auto';
-                vizContent.appendChild(img);
-            });
-            document.getElementById('visualizationsSection').classList.remove('hidden');
-
-            // Evaluation
-            document.getElementById('evaluationContent').innerHTML = `
-                <p><strong>Score:</strong> ${data.evaluation.score}</p>
-                <p><strong>Evaluation:</strong> ${data.evaluation.text}</p>
-            `;
-            document.getElementById('evaluationSection').classList.remove('hidden');
-
-            // Hyperlinks
-            const hyperlinksContent = document.getElementById('hyperlinksContent');
-            hyperlinksContent.innerHTML = '';
-            data.hyperlinks.forEach(link => {
-                const div = document.createElement('div');
-                div.innerHTML = `
-                    <p><strong>URL:</strong> <a href="${link.url}" target="_blank" class="text-blue-500 hover:underline">${link.url}</a></p>
-                    <p><strong>Context:</strong> ${link.context}</p>
-                    <p><strong>Page:</strong> ${link.page}</p>
-                    <p><strong>Source:</strong> ${link.source_file}</p>
-                    <hr class="my-2">
-                `;
-                hyperlinksContent.appendChild(div);
-            });
-            document.getElementById('hyperlinksSection').classList.remove('hidden');
-        }
-
-        function makeTablesEditable() {
-            const tables = document.querySelectorAll('#reportContent table');
-            tables.forEach(table => {
-                const headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent.trim());
-                const rows = table.querySelectorAll('tr');
-                rows.forEach((row, rowIndex) => {
-                    if (rowIndex === 0) return; // Skip header
-                    const cells = row.querySelectorAll('td');
-                    cells.forEach((cell, cellIndex) => {
-                        const header = headers[cellIndex];
-                        if (['Value', 'Pass Count', 'Fail Count'].includes(header)) {
-                            cell.setAttribute('contenteditable', 'true');
-                            cell.addEventListener('input', () => updateMetricsFromTable(table, rowIndex, cellIndex, cell.textContent));
-                        }
-                    });
-                });
+        // Display visualizations as images
+        function displayVisualizations(base64Images) {
+            const vizDiv = document.getElementById('visualizations');
+            vizDiv.innerHTML = '';
+            base64Images.forEach(img => {
+                const imgElement = document.createElement('img');
+                imgElement.src = `data:image/png;base64,${img}`;
+                vizDiv.appendChild(imgElement);
             });
         }
 
-        function updateMetricsFromTable(table, rowIndex, cellIndex, newValue) {
-            const headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent.trim());
-            const header = headers[cellIndex];
-            const sectionHeader = table.previousElementSibling?.textContent.trim();
-            const version = table.rows[rowIndex].cells[0].textContent.trim();
-            newValue = parseFloat(newValue.replace(/[^0-9.]/g, '')) || 0;
-
-            let metricName, subMetric, client;
-            if (sectionHeader?.includes('Customer Specific Testing')) {
-                client = sectionHeader.match(/(RBS|Tesco|Belk)/)?.[1];
-                metricName = 'Customer Specific Testing (UAT)';
-            } else {
-                metricName = sectionHeader?.replace('(ATLS)', '').replace('(BTLS)', '').trim();
-                subMetric = sectionHeader?.includes('ATLS') ? 'ATLS' : sectionHeader?.includes('BTLS') ? 'BTLS' : null;
-            }
-
-            if (client && metricName in currentMetrics.metrics) {
-                const uatMetrics = currentMetrics.metrics[metricName][client];
-                const item = uatMetrics.find(item => item.version === version);
-                if (item) {
-                    if (header === 'Pass Count') item.pass_count = newValue;
-                    if (header === 'Fail Count') item.fail_count = newValue;
-                }
-            } else if (subMetric && metricName in currentMetrics.metrics) {
-                const items = currentMetrics.metrics[metricName][subMetric];
-                const item = items.find(item => item.version === version);
-                if (item && header === 'Value') item.value = newValue;
-            } else if (metricName in currentMetrics.metrics && Array.isArray(currentMetrics.metrics[metricName])) {
-                const items = currentMetrics.metrics[metricName];
-                const item = items.find(item => item.version === version);
-                if (item && header === 'Value') item.value = newValue;
-            }
+        // Render markdown report
+        function displayReport(markdown) {
+            const reportDiv = document.getElementById('report');
+            reportDiv.innerHTML = marked.parse(markdown);
         }
 
-        document.getElementById('editReport').addEventListener('click', () => {
-            document.getElementById('reportContent').classList.add('hidden');
-            document.getElementById('reportEditor').value = originalReport;
-            document.getElementById('reportEditor').classList.remove('hidden');
-            document.getElementById('editReport').classList.add('hidden');
-            document.getElementById('saveChanges').classList.remove('hidden');
-            document.getElementById('cancelEdit').classList.remove('hidden');
-        });
+        // Display evaluation score and text
+        function displayEvaluation(evaluation) {
+            const evalDiv = document.getElementById('evaluation');
+            evalDiv.innerHTML = `<p>Score: ${evaluation.score}</p><p>${evaluation.text}</p>`;
+        }
 
-        document.getElementById('saveChanges').addEventListener('click', async () => {
-            const folderPath = document.getElementById('folderPath').value;
-            if (!folderPath) {
-                alert('Folder path is required to save changes');
-                return;
-            }
-            const editedReport = document.getElementById('reportEditor').value;
+        // Display hyperlinks in a table
+        function displayHyperlinks(hyperlinks) {
+            const hyperlinksDiv = document.getElementById('hyperlinks');
+            let html = '<table><tr><th>URL</th><th>Context</th><th>Page</th><th>Source File</th></tr>';
+            hyperlinks.forEach(link => {
+                html += `<tr><td><a href="${link.url}" target="_blank">${link.url}</a></td><td>${link.context}</td><td>${link.page}</td><td>${link.source_file}</td></tr>`;
+            });
+            html += '</table>';
+            hyperlinksDiv.innerHTML = html;
+        }
 
-            showLoading(true);
-            try {
-                const response = await fetch('http://127.0.0.1:8080/update_metrics', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        folder_path: folderPath,
-                        metrics: currentMetrics,
-                        report: editedReport
-                    })
-                });
-                if (!response.ok) throw new Error(`Failed to save changes: ${response.statusText}`);
-                const data = await response.json();
-                currentMetrics = JSON.parse(JSON.stringify(data.metrics));
-                originalReport = data.report;
-                displayResults(data);
-                cancelEdit();
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Failed to save changes. Please check the server.');
-            } finally {
-                showLoading(false);
-            }
-        });
+        // Enable report editing
+        function editReport() {
+            const reportDiv = document.getElementById('report');
+            originalReport = reportDiv.innerHTML;
+            const markdown = reportDiv.textContent; // Approximate markdown from rendered HTML
+            reportDiv.innerHTML = `<textarea id="reportEditor" rows="20" class="form-control">${markdown}</textarea>`;
+            document.getElementById('saveChanges').style.display = 'inline';
+            document.getElementById('cancelEdit').style.display = 'inline';
+            document.getElementById('editReport').style.display = 'none';
+            document.getElementById('metricsEditor').style.display = 'block';
+            metricsEditor.set(currentMetrics || {});
+        }
 
-        document.getElementById('cancelEdit').addEventListener('click', cancelEdit);
+        // Cancel report and metrics editing
         function cancelEdit() {
-            document.getElementById('reportContent').innerHTML = marked.parse(originalReport);
-            makeTablesEditable();
-            document.getElementById('reportContent').classList.remove('hidden');
-            document.getElementById('reportEditor').classList.add('hidden');
-            document.getElementById('editReport').classList.remove('hidden');
-            document.getElementById('saveChanges').classList.add('hidden');
-            document.getElementById('cancelEdit').classList.add('hidden');
+            const reportDiv = document.getElementById('report');
+            reportDiv.innerHTML = originalReport;
+            document.getElementById('saveChanges').style.display = 'none';
+            document.getElementById('cancelEdit').style.display = 'none';
+            document.getElementById('editReport').style.display = 'inline';
+            document.getElementById('metricsEditor').style.display = 'none';
         }
 
-        document.getElementById('downloadHtml').addEventListener('click', () => {
-            const blob = new Blob([document.getElementById('reportContent').innerHTML], { type: 'text/html' });
+        // Download report as HTML
+        function downloadHTML() {
+            const reportDiv = document.getElementById('report');
+            const blob = new Blob([reportDiv.innerHTML], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'report.html';
             a.click();
             URL.revokeObjectURL(url);
-        });
+        }
 
-        document.getElementById('downloadPdf').addEventListener('click', () => {
-            const element = document.getElementById('reportContent');
-            html2pdf().from(element).save('report.pdf');
-        });
+        // Download report and visualizations as PDF
+        async function downloadPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const reportDiv = document.getElementById('report');
+            const vizDiv = document.getElementById('visualizations');
+            let y = 10;
+            await doc.html(reportDiv, {
+                callback: function () {
+                    vizDiv.querySelectorAll('img').forEach((img, index) => {
+                        doc.addPage();
+                        doc.addImage(img.src, 'PNG', 10, 10, 190, 100);
+                    });
+                    doc.save('report.pdf');
+                },
+                x: 10,
+                y: y,
+                width: 190,
+                windowWidth: reportDiv.offsetWidth
+            });
+        }
+
+        // Validate form input
+        function validateForm() {
+            const folderPath = document.getElementById('folderPath').value;
+            if (!folderPath.trim()) {
+                alert('Folder path cannot be empty');
+                return false;
+            }
+            return true;
+        }
+
+        // Call /analyze endpoint
+        async function analyze() {
+            if (!validateForm()) return;
+            toggleLoading(true);
+            try {
+                const folderPath = document.getElementById('folderPath').value;
+                const clearCache = document.getElementById('clearCache').checked;
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ folder_path: folderPath, clear_cache: clearCache })
+                });
+                if (!response.ok) {
+                    const error = await response.json();
+                    alert(`Error: ${error.detail}`);
+                    return;
+                }
+                const data = await response.json();
+                currentMetrics = data.metrics;
+                metricsEditor.set(data.metrics);
+                displayVisualizations(data.visualizations);
+                displayReport(data.report);
+                displayEvaluation(data.evaluation);
+                displayHyperlinks(data.hyperlinks);
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Call /update_metrics endpoint
+        async function saveChanges() {
+            const folderPath = document.getElementById('folderPath').value;
+            const updatedMetrics = metricsEditor.get();
+            const updatedReport = document.getElementById('reportEditor').value;
+            try {
+                const response = await fetch('/update_metrics', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        folder_path: folderPath,
+                        metrics: updatedMetrics,
+                        report: updatedReport
+                    })
+                });
+                if (!response.ok) {
+                    const error = await response.json();
+                    alert(`Error: ${error.detail}`);
+                    return;
+                }
+                const data = await response.json();
+                currentMetrics = data.metrics;
+                metricsEditor.set(data.metrics);
+                displayVisualizations(data.visualizations);
+                displayReport(data.report);
+                displayEvaluation(data.evaluation);
+                displayHyperlinks(data.hyperlinks);
+                cancelEdit();
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Check backend health
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                const statusDiv = document.createElement('div');
+                statusDiv.textContent = `Backend Status: ${data.status}`;
+                statusDiv.className = data.status === 'healthy' ? 'alert alert-success' : 'alert alert-danger';
+                document.body.insertBefore(statusDiv, document.body.firstChild);
+            } catch (error) {
+                console.error('Health check failed:', error);
+            }
+        }
+
+        // Attach event listeners
+        document.getElementById('analyzeBtn').addEventListener('click', analyze);
+        document.getElementById('editReport').addEventListener('click', editReport);
+        document.getElementById('saveChanges').addEventListener('click', saveChanges);
+        document.getElementById('cancelEdit').addEventListener('click', cancelEdit);
+        document.getElementById('downloadHtml').addEventListener('click', downloadHTML);
+        document.getElementById('downloadPdf').addEventListener('click', downloadPDF);
+
+        // Run health check on load
+        window.onload = checkHealth;
     </script>
 </body>
 </html>
